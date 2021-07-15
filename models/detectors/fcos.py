@@ -167,10 +167,8 @@ class FCOSHead(nn.Module):
             # 注意要将网络的回归输出映射成非负值
             # 可使用exp()或relu
             # 若使用relu的话则同时要对回归的目标进行归一化
-            bbox_pred = self.bbox_pred(
-                F.relu(s(reg_branch_out)) if self.norm_reg_targets else torch.exp(s(reg_branch_out))
-            )
-            bbox_reg.append(bbox_pred)
+            bbox_pred = s(self.bbox_pred(reg_branch_out))
+            bbox_reg.append(F.relu(bbox_pred) if self.norm_reg_targets else torch.exp(bbox_pred))
 
             centerness.append(self.centerness(reg_branch_out) if self.cnt_on_reg else self.centerness(cls_branch_out))
 
