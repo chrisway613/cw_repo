@@ -169,14 +169,6 @@ if __name__ == '__main__':
 
     args = parse_args()
     args.distributed = num_gpus > 1
-    logger.info(f"[Train Distributed] {args.distributed}")
-
-    # 设置随机种子，以便复现实验结果
-    # 注意，分布式模式下各进程的随机种子需要不同，以免在使用一些概率性数据增强时造成数据同态
-    # 数据同态性会降低数据质量
-    seed = 0 if not args.distributed else 1 + dist.get_rank()
-    setup_seed(seed)
-
     if args.distributed:
         logger.info(f"[Local Rank] {args.local_rank}")
         torch.cuda.set_device(args.local_rank)
@@ -184,6 +176,13 @@ if __name__ == '__main__':
         # 同步 待所有进程都完成进程组相关的初始化之后再开始执行下一步
         # 避免由于某进程未加入进程组从而失联
         synchronize()
+    logger.info(f"[Train Distributed] {args.distributed}")
+
+    # 设置随机种子，以便复现实验结果
+    # 注意，分布式模式下各进程的随机种子需要不同，以免在使用一些概率性数据增强时造成数据同态
+    # 数据同态性会降低数据质量
+    seed = 0 if not args.distributed else 1 + dist.get_rank()
+    setup_seed(seed)
 
     reset_config(args)
 
