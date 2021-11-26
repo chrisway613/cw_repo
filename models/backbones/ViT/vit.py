@@ -61,12 +61,12 @@ class SelfAttention(nn.Module):
         z = torch.matmul(attn, v)
         # (b,num_heads,l,dim_per_head)->(b,l,num_heads,dim_per_head)->(b,l,dim_all_heads)
         z = z.transpose(1, 2).reshape(b, l, -1)
-        assert z.size(-1) == q.size(-1) * self.num_heads
+        # assert z.size(-1) == q.size(-1) * self.num_heads
 
         '''iv. Project out'''
         # (b,l,dim_all_heads)->(b,l,dim)
         out = self.out(z)
-        assert out.size(-1) == d
+        # assert out.size(-1) == d
 
         return out
 
@@ -132,8 +132,8 @@ class ViT(nn.Module):
         self.dropout = nn.Dropout(p=embed_dropout)
 
         self.transformer = Transformer(
-            dim, depth, mlp_dim, 
-            num_heads=num_heads, dim_per_head=dim_per_head, dropout=dropout
+            dim, mlp_dim, depth=depth, num_heads=num_heads,
+            dim_per_head=dim_per_head, dropout=dropout
         )
 
         self.pool = pool

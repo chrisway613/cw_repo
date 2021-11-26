@@ -5,6 +5,9 @@ import torch.nn.functional as F
 import os
 import sys
 
+from torchvision import transforms
+# import time
+
 BASE_DIR = os.path.dirname(__file__)
 sys.path.append(os.path.join(BASE_DIR, '..', '..', '..'))
 
@@ -56,7 +59,7 @@ class MAE(nn.Module):
         b, c, h, w = x.shape
 
         '''i. Patch partition'''
-        print('Patch partition..')
+        # s = time.time()
         num_patches = (h // self.patch_h) * (w // self.patch_w)
         # (b,c=3,h,w)->(b,n_patches,patch_size**2*c=3)
         patches = x.view(
@@ -64,9 +67,10 @@ class MAE(nn.Module):
             h // self.patch_h, self.patch_h, 
             w // self.patch_w, self.patch_w
         ).permute(0, 2, 4, 3, 5, 1).reshape(b, num_patches, -1)
+        # print(f"patch partition time: {time.time() - s}")
 
         '''ii. Divide into masked & un-masked groups'''
-        print('Dividing masked & un-masked patches..')
+        # s = time.time()
         num_masked = int(self.mask_ratio * num_patches)
 
         # Shuffle
@@ -77,16 +81,18 @@ class MAE(nn.Module):
         # (b,1)
         batch_ind = torch.arange(b, device=device).unsqueeze(-1)
         mask_patches, unmask_patches = patches[batch_ind, mask_ind], patches[batch_ind, unmask_ind]
+        # print(f"divide groups time: {time.time() - s}")
 
         '''iii. Encode'''
-        print('Encoding..')
+        # s = time.time()
         unmask_tokens = self.encoder.patch_embed(unmask_patches)
         # Add position embedding un-masked indices shift by 1 cuz the 0 position is belong to cls_token
-        unmask_tokens += self.encoder.pos_embed.repeat(b, 1, 1)[batch_ind, unmask_ind + 1, :]
+        unmask_tokens += self.encoder.pos_embed.repeat(b, 1, 1)[batch_ind, unmask_ind + 1]
         encoded_tokens = self.encoder.transformer(unmask_tokens)
+        # print(f"encode time: {time.time() - s}")
 
         '''iv. Decode'''
-        print('Decoding..')
+        # s = time.time()
         enc_to_dec_tokens = self.enc_to_dec(encoded_tokens)
 
         # (decoder_dim)->(b,n_masked,decoder_dim)
@@ -96,23 +102,35 @@ class MAE(nn.Module):
 
         # (b,n_patches,decoder_dim)
         concat_tokens = torch.cat([mask_tokens, enc_to_dec_tokens], dim=1)
+        # dec_input_tokens = concat_tokens
         dec_input_tokens = torch.empty_like(concat_tokens, device=device)
         # Un-shuffle
         # TODO: whether this is important!?
         dec_input_tokens[batch_ind, shuffle_indices] = concat_tokens
         decoded_tokens = self.decoder(dec_input_tokens)
+        # print(f"decode time: {time.time() - s}")
 
         '''v. Loss computation'''
-        print('Loss computation..')
+        # s = time.time()
         dec_mask_tokens = decoded_tokens[batch_ind, mask_ind, :]
         # (b,n_masked,n_pixels_per_patch=patch_size**2 x 3)
         pred_mask_pixel_values = self.head(dec_mask_tokens)
 
         loss = F.mse_loss(pred_mask_pixel_values, mask_patches)
+        # print(f"loss compute time: {time.time() - s}")
+
         return loss
 
 
 if __name__ == '__main__':
+    import random
+    import numpy as np
+
+    random.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+
     device = torch.device('cuda:7' if torch.cuda.is_available() else 'cpu')
 
     img_size, patch_size = 224, 16
@@ -126,14 +144,15 @@ if __name__ == '__main__':
     mae.to(device)
 
     from torch.optim import SGD
-    optimizer = SGD(mae.parameters(), 0.1)
+    optimizer = SGD(mae.parameters(), lr=1e-2)
 
-    steps, min_loss = 1000, 1e-6
+    steps = 100000
+    eps = 1e-6
     for i in range(steps):
         loss = mae(img)
         print(f"step: {i} loss: {loss.item()}")
 
-        if loss < min_loss:
+        if loss < eps:
             break
 
         loss.backward()
