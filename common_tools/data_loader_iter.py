@@ -2,6 +2,7 @@
    当原生的DataLoader返回的一个批次数据是map类型时，还可以继承它们自定义子类，
    重写inputs_labels_from_batch_data方法，从而获取一个批次的网络输入与标签，滤除其余无关数据信息"""
 
+from typing import List, Tuple, Union
 from torch.utils.data.dataloader import DataLoader
 
 
@@ -15,7 +16,7 @@ class DataLoaderIter:
         return self.dataloader.dataset
 
     @staticmethod
-    def inputs_labels_from_batch_data(batch_data: (list, tuple)):
+    def inputs_labels_from_batch_data(batch_data: Union[List, Tuple]):
         if not (isinstance(batch_data, list) or isinstance(batch_data, tuple)):
             raise ValueError(f"your batch type {type(batch_data)} is not supported,"
                              f"please inherit from `TrainDataLoaderIter` or `ValDataLoaderIter` "
